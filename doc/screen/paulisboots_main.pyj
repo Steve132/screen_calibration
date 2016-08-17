@@ -1,0 +1,154 @@
+import qusimple
+import paulisboots_game
+import paulisboots_render
+
+game=paulisboots_game.game
+
+def m_update_state_tick_wrapper(s):
+	s.update_state_tick()
+
+class Machine:
+	def __init__(self,position,width,height,statepattern,delaytime=500):
+		self.width=width
+		self.height=height
+		self.position=position
+
+		self.statetiles=paulisboots_render.QuMachineStateTiles((position[0]+.5,position[1]),width,height)
+		self.gatestages=[{} for x in range(self.width)]
+
+		self.firststate=qusimple.QuState(height)
+
+		self.statepattern=statepattern
+		self.stateid=0
+		self.statecur=statepattern[0]
+
+		self.update_state_tick()
+
+		game.time.events.loop(delaytime, m_update_state_tick_wrapper,this,self)
+		#self.update_timer=new Phaser.Timer(game,False)
+		#self.update_timer.loop(delaytime,Machine.update_state_tick,this,[self])
+		
+	def updatequantum(self):
+		bitrange=[x for x in range(self.height)]
+
+		cs=self.firststate
+		
+		for i in range(self.width):
+			self.statetiles.wires[i]=Array(self.height)
+			
+			for key in Object.keys(self.gatestages[i]):
+				gate=self.gatestages[i][key]
+				cs=gate(cs)
+			bits=cs.read_bits(bitrange)
+			
+			for j in range(self.height):
+				tw=bits[j]
+				self.statetiles.wires[i][j]=[Complex(tw[0].re,tw[0].im),Complex(tw[1].re,tw[0].im)]
+		
+			
+		#tw=self.statetiles.wires[0][0]
+
+		self.statetiles.updatewirestex()
+
+	def update_state_tick(self):
+		self.statecur=self.statepattern[self.stateid]
+		self.firststate=qusimple.QuState(self.height,initialval=self.statecur)
+		self.updatequantum()
+		self.stateid=(self.stateid+1) % len(self.statepattern)
+
+	def tilecoordtomachinecoord(self,x,y):
+		ox=x-self.position[0]
+		oy=y-self.position[1]
+		if(ox < 0 or ox >= self.width):
+			return None
+		if(oy < 0 or oy >= self.height):
+			return None
+		return (ox,oy)
+
+	def place_part(self,key,gate,x,y):
+		mc=self.tilecoordtomachinecoord(x,y)
+		if(mc):
+			wirelist=[mc[1]]
+			self.gatestages[mc[0]][key]=def(sp): return gate(sp,wirelist);
+		
+
+	def remove_part(self,key,gate,x,y):
+		mc=self.tilecoordtomachinecoord(x,y)
+		if(mc):
+			del self.gatestages[mc[0]][key]
+		
+
+	def update(self):
+		self.statetiles.update()
+
+	def render(self):
+		self.statetiles.render()
+
+	def start(self):
+		pass
+		#self.update_timer.start()
+	def stop(self):
+		pass
+		#self.update_timer.stop()
+
+
+def onDragPartStop(sprite, pointer,machine):
+	result = sprite.key + " dropped at x:" + pointer.x + " y: " + pointer.y
+	px = Math.floor(pointer.x / paulisboots_render.tilesize)
+	py = Math.floor(pointer.y / paulisboots_render.tilesize)
+	machine.place_part(sprite.key,sprite.gate,px,py)
+
+def onDragPartStart(sprite,pointer,tilex,tiley,machine):
+	result = sprite.key + " picked up at x:" + pointer.x + " y: " + pointer.y
+	px = Math.floor(pointer.x / paulisboots_render.tilesize)
+	py = Math.floor(pointer.y / paulisboots_render.tilesize)
+	machine.remove_part(sprite.key,sprite.gate,px,py)
+
+def genuiid():
+	return Math.random().toPrecision(16)
+
+class levelviewer:
+	def __init__(self):
+		pass
+
+	def preload(self):
+		#sprite.events.onDragStop   
+		game.load.image('machine_not_img', 'sprites/not.png')
+		game.load.image('machine_hadamard_img', 'sprites/hadamard.png')
+
+	def addsprite(self,x,y,imgname,gate,movable):
+		sp=game.add.sprite(x*paulisboots_render.tilesize,y*paulisboots_render.tilesize,imgname)
+		if(movable):
+			sp.inputEnabled=True
+			sp.input.enableDrag()
+			sp.input.enableSnap(paulisboots_render.tilesize,paulisboots_render.tilesize,False,True)
+			sp.events.onDragStop.add(onDragPartStop,self,0,self.machine)
+			sp.events.onDragStart.add(onDragPartStart,self,0,self.machine)
+		sp.gate=gate
+		sp.key+=genuiid()
+		self.machine.place_part(sp.key,sp.gate,x,y)
+		return sp
+	
+	def create(self):
+		self.bg=paulisboots_render.DebugTiles((0,0),20,8)
+		self.machine=Machine((1,1),17,2,[0,1])
+		self.machine.start()
+		self.gates=[]
+		self.gates.push(self.addsprite(3,4,'machine_not_img',qusimple.qu_not,True))
+		self.gates.push(self.addsprite(4,4,'machine_not_img',qusimple.qu_not,True))
+		self.gates.push(self.addsprite(5,4,'machine_not_img',qusimple.qu_not,True))
+		self.gates.push(self.addsprite(3,5,'machine_hadamard_img',qusimple.qu_hadamard,True))
+		self.gates.push(self.addsprite(4,5,'machine_hadamard_img',qusimple.qu_hadamard,True))
+
+	def update(self):
+		self.machine.update()
+		#self.fr.update()
+
+	def render(self):
+		self.machine.render()
+
+	def shutdown(self):
+		pass
+
+
+game.state.add('levelviewer',levelviewer(),True)

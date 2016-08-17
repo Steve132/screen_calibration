@@ -1,0 +1,40 @@
+<html>
+<body>
+
+<script type="text/javascript" src="sha256.js"></script>
+
+<script type="text/javascript">
+
+//http://neocotic.com/qrious/
+//https://codepen.io/ianmcgregor/pen/qkvcj
+//http://fiddle.jshell.net/danthewolfe/6ja1kw32/
+
+function hexsha2num(hs,bits)
+{
+	var nbytes=Math.ceil(bits/8);
+	var nval=parseInt(hs.substr(0,2*nbytes),16);
+	var mask=(1 << bits)-1;
+	return nval & mask;
+}
+
+function prand_bits(index,bits,seed)
+{
+	var input=seed.toString()+index.toString();
+	var output=sha256(input);
+	var bits=hexsha2num(output,bits);
+	return bits;
+}
+
+window.onload=function()
+{
+	var seed=1;
+	var vals=500;
+	for(var i=0;i<vals;i++)
+	{
+		console.log(prand_bits(i,20,seed));
+	}
+};
+</script>
+
+</body>
+</html>

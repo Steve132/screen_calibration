@@ -1,0 +1,5 @@
+def newgame(width,height,renderer=Phaser.WEBGL,parent='',state=None,transparent=False,antialias=True,physicsConfig=None):
+	return new Phaser.Game(width,height,renderer,parent,state,transparent,antialias,physicsConfig)
+
+game=newgame(width=1280,height=720,transparent=True,state=None)
+

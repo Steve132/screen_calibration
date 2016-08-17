@@ -1,0 +1,225 @@
+import paulisboots_game
+game=paulisboots_game.game
+
+@external
+class Complex:
+	pass
+
+def update_dict(obj,obj2):
+	for k in Object.keys(obj2):
+		obj[k]=obj2[k]
+
+
+viewport_size=(1280,720)
+tilesize=64
+
+PI=Complex.PI.re
+
+class TiledSprite:
+	def __init__(self,shader,position=(0,0),width=10,height=2,uniforms={}):
+		self.height=height
+		self.width=width
+		self.position=position
+		self.sprite=game.add.sprite(self.position[0]*tilesize,self.position[1]*tilesize)
+		self.sprite.width=self.width*tilesize
+		self.sprite.height=self.height*tilesize
+		self.uniforms={
+			'tilesize':{'type':'1f','value':tilesize},
+			'viewport':{'type':'2f','value':{'x':viewport_size[0],'y':viewport_size[1]}}
+		}
+		update_dict(self.uniforms,uniforms)
+		self.filter=new Phaser.Filter(game,self.uniforms,[shader])
+		
+		self.filter.setResolution(self.sprite.width,self.sprite.height)
+		self.sprite.filters=[self.filter]
+
+	def update(self):
+		self.filter.update()
+
+class DebugTiles(TiledSprite):
+	def frag(self):
+		return """
+precision mediump float;
+
+uniform vec2 resolution;
+uniform vec2 viewport;
+uniform float tilesize;
+
+varying vec2 vTextureCoord;
+
+void main() 
+{
+	vec2 uv = vTextureCoord / vec2(resolution.x/viewport.x, resolution.y/viewport.y);   
+	uv.y=1.0-uv.y;
+	vec2 gridcoord=uv*resolution/(tilesize);
+	
+
+	vec2 flb = mod(floor(gridcoord*2.0),2.0);
+	if(flb.x != flb.y)
+	{
+		gl_FragColor = vec4(0.25,0.25,0.25,1.0);
+	}
+	else
+	{
+		gl_FragColor = vec4(0.0,0.0,0.0,1.0);
+	}
+	vec2 v=mod(gridcoord,1.0);
+	float c=1.0/tilesize;
+	if(v.x < c || v.y < c || v.x > (1.0-c) || v.y > (1.0-c))
+	{
+		gl_FragColor = vec4(1.0,0.0,0.0,1.0);
+	}
+}
+"""
+	def __init__(self,position=(0,0),width=10,height=2):
+		TiledSprite.__init__(self,self.frag(),position,width,height)
+
+
+def GoodArg(c):
+	u=Complex.arg(c)
+	if(u < 0.0):
+		return u+2.0*PI
+	else:
+		return u
+
+class QuMachineStateTiles(TiledSprite):
+	def frag(self):
+		return """
+precision highp float;
+
+
+#define M_PI 3.1415926535897932384626433832795
+
+uniform vec2 resolution;
+uniform vec2 viewport;
+uniform float tilesize;
+uniform float time;
+uniform sampler2D wirestex;
+
+varying vec2 vTextureCoord;
+
+/*vec3 quantum_plasma_color(vec2 coord,float u,float v,float w)	
+{
+
+	return vec3(0.0,0.0,0.0);
+}*/
+
+vec3 quantum_plasma_color(float angle)
+{
+	float ap=1.0;
+	vec3 result=vec3(0.0,0.0,0.0);
+	
+	result+=ap*vec3(-3.7934201999e-03,9.9869016433e-01,-2.9471302703e-03);ap*=angle;
+	result+=ap*vec3(3.8771816048e-01,-1.2329905575e+00,1.7962620907e+00);ap*=angle;
+	result+=ap*vec3(-5.7505155378e-01,7.5759508453e-01,-2.5456120297e+00);ap*=angle;
+	result+=ap*vec3(-6.0064214572e-01,-4.6521561493e-01,2.5540902401e+00);ap*=angle;
+	result+=ap*vec3(1.2529601829e+00,2.5740480529e-01,-1.4393934117e+00);ap*=angle;
+	result+=ap*vec3(-6.7597311367e-01,-9.4990247014e-02,4.3085008373e-01);ap*=angle;
+	result+=ap*vec3(1.6504064059e-01,2.1024143017e-02,-6.8771902066e-02);ap*=angle;
+	result+=ap*vec3(-1.9150373110e-02,-2.4624232147e-03,5.5155433277e-03);ap*=angle;
+	result+=ap*vec3(8.5824682423e-04,1.1553322634e-04,-1.7329983951e-04);ap*=angle;
+
+	return result;
+}
+
+vec3 quantum_plasma_tile(vec2 coord,vec3 uvw)  //Visualize qubit as cos(w)(e^i u)|0> + sin(w)(e^i w)|1> where w is 0-9  	//w goes from 0-90 for angle.
+	//u goes for 0-360 for |0>,v goes 0-360 for |1>
+{
+	vec2 scw=vec2(-sin(uvw.z),cos(uvw.z));
+	float ydist=dot(scw,coord);
+
+	const float width=10.0/40.0;
+
+	if(ydist <= 0.0)
+	{
+		return ydist >= -width ? vec3(1.0,1.0,1.0) : quantum_plasma_color(uvw.y);
+	}
+	else
+	{
+		return ydist <= width ? vec3(0.0,0.0,0.0) : quantum_plasma_color(uvw.x);
+	}
+}
+
+void main() 
+{
+	vec2 uv = vTextureCoord / vec2(resolution.x/viewport.x, resolution.y/viewport.y);   
+	uv.y=1.0-uv.y;
+	vec2 numtiles=resolution/tilesize;
+	vec2 gridcoord=uv*numtiles;
+
+	vec2 wirecoord=(vec2(gridcoord.x,mod(gridcoord.y,1.0))-vec2(0.0,0.1875))/0.625;
+	if(wirecoord.y > 0.0 && wirecoord.y < 1.0)
+	{
+		wirecoord.y=asin(2.0*wirecoord.y-1.0)*.5/(M_PI*.5)+.5;//make it look tubular
+		wirecoord=mod(wirecoord+vec2(1.0,0.0)*sin(.25*time)-.25*time,1.0); //animate it
+
+		vec2 plasmatc=abs(wirecoord*2.0-1.0);	//make it mirror 4 ways
+		
+		vec2 tc=(floor(gridcoord)+0.5)/numtiles;
+		vec3 uvdata=texture2D(wirestex,tc).rgb;
+		vec3 uvw=uvdata*vec3(2.0,2.0,.5)*M_PI;
+		//uvw.z=.5*M_PI;
+
+		gl_FragColor=vec4(quantum_plasma_tile(plasmatc,uvw),1.0);
+	//	gl_FragColor=vec4(uvdata,1.0);
+	
+	}
+	else
+	{
+		gl_FragColor=vec4(0.0,0.0,0.0,0.0);
+	}
+}
+"""
+	def __init__(self,position=(0,0),width=numtileswidth,height=2):
+		self.wirestex=new Phaser.BitmapData(game,'wirestex',width,height)
+		self.wirestex.addToWorld()
+		NEAREST=game.renderer.gl.NEAREST
+		customUniforms = {'wirestex':{ 'type':'sampler2D', 'value':self.wirestex.texture ,'textureData':{'minFilter':NEAREST,'magFilter':NEAREST } } }
+		TiledSprite.__init__(self,self.frag(),position,width,height,customUniforms)
+		
+		self.wires=Array(self.height)
+		for i in range(self.width):
+			self.wires[i]=Array(self.height)
+			for j in range(self.height):
+				#self.wires[i][j]=(Complex(Math.random()*2.0-1.0,Math.random()*2.0-1.0),Complex(Math.random()*2.0-1.0,Math.random()*2.0-1.0))
+				#if(i & 1):
+			#		self.wires[i][j]=(Complex(1.0,0.0),Complex(0.0,0.0))
+			#	else:
+			#		self.wires[i][j]=(Complex(-1.0,0.0),Complex(0.0,0.0))
+				self.wires[i][j]=(Complex(0.0,1.0),Complex(0.0,0.0))
+
+		self.updatewirestex()
+			
+	def updatewirestex(self):
+		eh=self.height-1
+		ew=self.width-1
+		wnorm=255.0*2.0/PI
+		unorm=255.0/(2.0*PI)
+		vnorm=unorm
+
+		for i in range(self.height):
+			for j in range(self.width):
+				cv=self.wires[j][i]
+		
+				mag0=Complex.abs(cv[0])
+				mag1=Complex.abs(cv[1])
+				
+			
+				w=Math.atan2(mag1,mag0)
+				u=GoodArg(cv[0])
+				v=GoodArg(cv[1])
+
+				cbr=u*unorm
+				cbg=v*vnorm
+				cbb=w*wnorm
+		
+				#print(mag0,mag1,w,u,v,cbr,cbg,cbb)
+
+				self.wirestex.setPixel32(j,i,cbr,cbg,cbb,255.0,False)
+		self.wirestex.setPixel32(j,i,cbr,cbg,cbb,255.0,True)
+
+	def render(self):
+		self.wirestex.render()
+
+	
+
